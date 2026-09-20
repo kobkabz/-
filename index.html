@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เข้าสู่ระบบ · ระบบตรวจข้อสอบ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/style.css">
+</head>
+<body>
+<div class="wrap narrow">
+  <header class="top">
+    <div class="eyebrow">Answer Sheet Studio</div>
+    <h1>เข้าสู่ระบบ</h1>
+    <p>สำหรับครูและแอดมิน — ไม่มีการสมัครสมาชิกเอง ต้องให้แอดมินสร้างไอดีให้</p>
+  </header>
+
+  <div class="sheet">
+    <div class="row" style="flex-direction:column;">
+      <div>
+        <label class="field-label">ชื่อผู้ใช้</label>
+        <input type="text" id="username" autocomplete="username" placeholder="เช่น teacher01" onkeydown="if(event.key==='Enter') doLogin()"/>
+      </div>
+      <div>
+        <label class="field-label">รหัสผ่าน</label>
+        <input type="password" id="password" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin()"/>
+      </div>
+    </div>
+    <div id="msg"></div>
+    <div class="btn-row">
+      <button class="btn" id="loginBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase } from './shared/supabaseClient.js';
+  import { usernameToEmail } from './shared/config.js';
+
+  window.doLogin = async function(){
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('loginBtn');
+    msg.innerHTML = '';
+    if(!username || !password){
+      msg.innerHTML = '<div class="error">กรุณากรอกชื่อผู้ใช้และรหัสผ่าน</div>';
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ...';
+    const email = usernameToEmail(username);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+    if(error){
+      msg.innerHTML = '<div class="error">เข้าสู่ระบบไม่สำเร็จ: ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>';
+      return;
+    }
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
+    if(profile && profile.role === 'admin'){
+      window.location.href = 'admin.html';
+    }else{
+      window.location.href = 'app.html';
+    }
+  };
+
+  // already logged in? skip straight through
+  (async ()=>{
+    const { data: { session } } = await supabase.auth.getSession();
+    if(session){
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+      window.location.href = (profile && profile.role==='admin') ? 'admin.html' : 'app.html';
+    }
+  })();
+</script>
+</body>
+</html>

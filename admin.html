@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>แผงแอดมิน · ระบบตรวจข้อสอบ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/style.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <span id="whoami">กำลังโหลด...</span>
+    <button class="linklike" onclick="doLogout()">ออกจากระบบ</button>
+  </div>
+  <header class="top">
+    <div class="eyebrow">Admin Panel</div>
+    <h1>สร้างไอดีครู</h1>
+    <p>เฉพาะแอดมินเท่านั้นที่เข้าหน้านี้ได้ — ครูไม่สามารถสมัครเองได้</p>
+  </header>
+
+  <div class="sheet" style="margin-bottom:20px;">
+    <h2 class="step-title">สร้างไอดีครูใหม่</h2>
+    <p class="step-desc">ตั้งชื่อผู้ใช้และรหัสผ่านให้ครูแต่ละคน แล้วส่งให้ครูไปเข้าสู่ระบบเอง</p>
+    <div class="row">
+      <div>
+        <label class="field-label">ชื่อผู้ใช้ (ภาษาอังกฤษ/ตัวเลข ไม่มีเว้นวรรค)</label>
+        <input type="text" id="newUsername" placeholder="เช่น teacher01"/>
+      </div>
+      <div>
+        <label class="field-label">ชื่อที่แสดง</label>
+        <input type="text" id="newDisplayName" placeholder="เช่น ครูสมศรี ใจดี"/>
+      </div>
+      <div>
+        <label class="field-label">รหัสผ่านเริ่มต้น</label>
+        <input type="text" id="newPassword" placeholder="อย่างน้อย 6 ตัวอักษร"/>
+      </div>
+    </div>
+    <div id="createMsg"></div>
+    <div class="btn-row">
+      <button class="btn" id="createBtn" onclick="createTeacher()">สร้างไอดีครู</button>
+    </div>
+  </div>
+
+  <div class="sheet">
+    <h2 class="step-title">รายชื่อครูในระบบ</h2>
+    <table class="review" id="teacherTable"><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สร้างเมื่อ</th></tr></table>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase, requireSession, getProfile, logout } from './shared/supabaseClient.js';
+  import { SUPABASE_URL, usernameToEmail } from './shared/config.js';
+
+  window.doLogout = logout;
+
+  let session, profile;
+
+  async function init(){
+    session = await requireSession('index.html');
+    if(!session) return;
+    profile = await getProfile(session.user.id);
+    if(!profile || profile.role !== 'admin'){
+      alert('หน้านี้สำหรับแอดมินเท่านั้น');
+      window.location.href = 'app.html';
+      return;
+    }
+    document.getElementById('whoami').textContent = `แอดมิน: ${profile.display_name || profile.username}`;
+    await loadTeachers();
+  }
+
+  async function loadTeachers(){
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('username, display_name, created_at')
+      .eq('role', 'teacher')
+      .order('created_at', { ascending: false });
+    const table = document.getElementById('teacherTable');
+    let html = '<tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สร้างเมื่อ</th></tr>';
+    (data||[]).forEach(t=>{
+      html += `<tr><td>${t.username}</td><td>${t.display_name||'—'}</td><td>${new Date(t.created_at).toLocaleDateString('th-TH')}</td></tr>`;
+    });
+    table.innerHTML = html;
+  }
+
+  window.createTeacher = async function(){
+    const username = document.getElementById('newUsername').value.trim();
+    const display_name = document.getElementById('newDisplayName').value.trim();
+    const password = document.getElementById('newPassword').value;
+    const msg = document.getElementById('createMsg');
+    const btn = document.getElementById('createBtn');
+    msg.innerHTML = '';
+    if(!username || !password || password.length < 6){
+      msg.innerHTML = '<div class="error">กรุณากรอกชื่อผู้ใช้ และรหัสผ่านอย่างน้อย 6 ตัวอักษร</div>';
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'กำลังสร้าง...';
+    try{
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/create-teacher`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ username, password, display_name })
+      });
+      const result = await resp.json();
+      if(!resp.ok){
+        msg.innerHTML = `<div class="error">สร้างไม่สำเร็จ: ${result.error||'ไม่ทราบสาเหตุ'}</div>`;
+      }else{
+        msg.innerHTML = `<div class="hint">✓ สร้างไอดีครู "${username}" สำเร็จ — แจ้งชื่อผู้ใช้และรหัสผ่านนี้ให้ครูไปเข้าสู่ระบบได้เลย</div>`;
+        document.getElementById('newUsername').value='';
+        document.getElementById('newDisplayName').value='';
+        document.getElementById('newPassword').value='';
+        await loadTeachers();
+      }
+    }catch(e){
+      msg.innerHTML = `<div class="error">เกิดข้อผิดพลาด: ${e.message}</div>`;
+    }
+    btn.disabled = false; btn.textContent = 'สร้างไอดีครู';
+  };
+
+  init();
+</script>
+</body>
+</html>

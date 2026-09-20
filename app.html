@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบตรวจข้อสอบปรนัย</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="shared/style.css">
+<style>
+  .tabs{display:flex;justify-content:center;gap:6px;margin:22px 0;flex-wrap:wrap;}
+  .tab{
+    font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;
+    padding:9px 16px 8px;background:var(--paper-2);
+    border:1px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;
+    color:var(--graphite);cursor:pointer;position:relative;top:1px;
+  }
+  .tab.active{background:var(--white);color:var(--ink);border-color:var(--ink);top:0;}
+  .tab .done{color:var(--correct);margin-right:4px;}
+  .stamp{position:absolute;top:18px;right:22px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:var(--correct);border:2px solid var(--correct);padding:4px 10px;border-radius:6px;transform:rotate(6deg);opacity:.9;}
+  .choice-toggle{display:flex;gap:8px;}
+  .choice-toggle button{flex:1;padding:9px;border-radius:8px;border:1.5px solid var(--line);background:var(--paper);font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px;cursor:pointer;color:var(--graphite);}
+  .choice-toggle button.active{background:var(--ink);color:var(--white);border-color:var(--ink);}
+  .key-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;max-height:360px;overflow:auto;padding:4px 2px;border:1px solid var(--line);border-radius:10px;background:var(--paper);}
+  .key-cell{background:var(--white);border:1px solid var(--line);border-radius:8px;padding:6px 8px;display:flex;align-items:center;gap:6px;}
+  .key-cell .qn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:700;color:var(--graphite);width:26px;}
+  .bubble{width:22px;height:22px;border-radius:50%;border:1.6px solid var(--graphite);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;cursor:pointer;color:var(--graphite);background:var(--white);flex-shrink:0;}
+  .bubble.on{background:var(--ink);border-color:var(--ink);color:var(--white);}
+  canvas{max-width:100%;border-radius:10px;border:1px solid var(--line);cursor:crosshair;display:block;background:#ddd;}
+  .canvas-wrap{position:relative;display:inline-block;max-width:100%;}
+  .scan-line{position:absolute;left:0;right:0;height:3px;background:var(--highlight);box-shadow:0 0 12px 3px var(--highlight);opacity:0;pointer-events:none;}
+  .scan-line.active{animation:sweep 1.1s linear;}
+  @keyframes sweep{0%{top:0%;opacity:1;} 100%{top:100%;opacity:0;}}
+  .upload-drop{border:2px dashed var(--line);border-radius:12px;padding:30px;text-align:center;color:var(--graphite);font-size:14px;cursor:pointer;background:var(--paper);}
+  .upload-drop:hover{border-color:var(--ink-soft);}
+  select.override{font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:4px 6px;border-radius:6px;border:1.4px solid var(--line);background:var(--white);}
+  .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;}
+  .tag.ok{background:rgba(63,125,88,.14);color:var(--correct);}
+  .tag.no{background:rgba(193,68,58,.14);color:var(--incorrect);}
+  .tag.blank{background:rgba(85,82,77,.12);color:var(--graphite);}
+  .score-big{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:42px;color:var(--ink);line-height:1;}
+  .score-cap{font-size:14px;color:var(--graphite);}
+  .stat-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12.5px;}
+  .stat-bar-row .qlabel{width:46px;font-family:'IBM Plex Mono',monospace;color:var(--graphite);flex-shrink:0;}
+  .stat-bar-track{flex:1;height:10px;background:var(--paper-2);border-radius:5px;overflow:hidden;}
+  .stat-bar-fill{height:100%;background:var(--ink-soft);}
+  .stat-bar-fill.low{background:var(--incorrect);}
+  .stat-pct{width:38px;text-align:right;font-family:'IBM Plex Mono',monospace;color:var(--graphite);flex-shrink:0;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(35,41,102,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;}
+  .modal-card{background:var(--white);border-radius:14px;max-width:520px;width:100%;max-height:86vh;overflow:auto;padding:26px;box-shadow:0 20px 50px rgba(0,0,0,.25);}
+  .modal-card h3{margin:0 0 14px;font-size:17px;}
+  .edit-name-fields{display:flex;gap:12px;margin-bottom:14px;}
+  @media print{ body *{visibility:hidden;} #printArea, #printArea *{visibility:visible;} #printArea{position:absolute;top:0;left:0;width:100%;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <span id="whoami">กำลังโหลด...</span>
+    <button class="linklike" onclick="doLogout()">ออกจากระบบ</button>
+  </div>
+  <header class="top">
+    <div class="eyebrow">Answer Sheet Studio</div>
+    <h1>ระบบตรวจข้อสอบปรนัย</h1>
+    <p>ตั้งเฉลย → พิมพ์กระดาษคำตอบ → สแกน/ถ่ายรูป → ตรวจอัตโนมัติ</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-step="1" onclick="goStep(1)"><span class="done" id="d1"></span>1 · ตั้งค่าเฉลย</button>
+    <button class="tab" data-step="2" onclick="goStep(2)"><span class="done" id="d2"></span>2 · พิมพ์กระดาษคำตอบ</button>
+    <button class="tab" data-step="3" onclick="goStep(3)"><span class="done" id="d3"></span>3 · สแกนตรวจ</button>
+    <button class="tab" data-step="4" onclick="goStep(4)"><span class="done" id="d4"></span>4 · สรุปผล</button>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="sheet" id="step1">
+    <h2 class="step-title">ตั้งค่าข้อสอบและเฉลย</h2>
+    <p class="step-desc">เลือกข้อสอบเดิม หรือสร้างใหม่ กำหนดจำนวนข้อ จำนวนตัวเลือก แล้วคลิกกำหนดคำตอบที่ถูก</p>
+
+    <div class="row">
+      <div>
+        <label class="field-label">ข้อสอบของฉัน</label>
+        <select id="examPicker" onchange="onPickExam()"><option value="">— สร้างข้อสอบใหม่ —</option></select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label class="field-label">ชื่อข้อสอบ / วิชา</label>
+        <input type="text" id="examTitle" value="แบบทดสอบ" />
+      </div>
+      <div>
+        <label class="field-label">ชั้นเรียน</label>
+        <select id="classSelect" onchange="onClassChange()"></select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label class="field-label">จำนวนข้อ</label>
+        <input type="number" id="numQuestions" value="20" min="1" max="120" onchange="rebuildKeyGrid()" />
+      </div>
+      <div>
+        <label class="field-label">จำนวนตัวเลือกต่อข้อ</label>
+        <div class="choice-toggle" id="choiceToggle">
+          <button onclick="setNumChoices(4)" class="active" data-n="4">4 (ก-ง)</button>
+          <button onclick="setNumChoices(5)" data-n="5">5 (ก-จ)</button>
+        </div>
+      </div>
+    </div>
+
+    <label class="field-label">เฉลย (คลิกที่ตัวเลือกที่ถูกของแต่ละข้อ)</label>
+    <div class="key-grid" id="keyGrid"></div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="saveConfigAndNext()">บันทึกเฉลย และไปพิมพ์กระดาษคำตอบ →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="sheet" id="step2" style="display:none;">
+    <h2 class="step-title">กระดาษคำตอบสำหรับพิมพ์</h2>
+    <p class="step-desc">พิมพ์แผ่นนี้แจกนักเรียน หรือดาวน์โหลดเป็นรูปภาพ — <b>ห้ามครอบตัดกรอบสี่เหลี่ยมสีดำที่มุมทั้ง 4</b> เพราะใช้อ้างอิงตอนสแกนตรวจ</p>
+    <div id="studentNav" style="display:none;">
+      <div class="hint" id="studentNavLabel"></div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn ghost" onclick="prevStudent()">← คนก่อนหน้า</button>
+        <button class="btn ghost" onclick="nextStudent()">คนถัดไป →</button>
+      </div>
+    </div>
+    <div id="printArea" style="text-align:center;margin-top:14px;">
+      <canvas id="templateCanvas" width="850" height="1100" style="max-width:420px;"></canvas>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="downloadTemplate()">ดาวน์โหลดใบนี้ (PNG)</button>
+      <button class="btn secondary" onclick="window.print()">พิมพ์ใบนี้</button>
+      <button class="btn ghost" onclick="goStep(3)">ไปขั้นตอนสแกนตรวจ →</button>
+    </div>
+    <div class="btn-row" id="classPdfRow" style="display:none;">
+      <button class="btn" onclick="downloadClassPdf()">ดาวน์โหลด PDF ทั้งชั้น (มีชื่อนักเรียนครบทุกใบ)</button>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="sheet" id="step3" style="display:none;">
+    <h2 class="step-title">สแกน/ถ่ายรูป แล้วตรวจอัตโนมัติ</h2>
+    <p class="step-desc">อัปโหลดรูปกระดาษคำตอบที่กรอกแล้ว จากนั้นคลิกจุดสี่เหลี่ยมดำทั้ง 4 มุมตามลำดับ (บนซ้าย → บนขวา → ล่างซ้าย → ล่างขวา)</p>
+    <div id="uploadZone" class="upload-drop" onclick="document.getElementById('fileInput').click()">
+      📄 คลิกเพื่อเลือกรูปภาพกระดาษคำตอบ (ถ่ายรูป/สแกน)
+      <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFile(event)"/>
+    </div>
+    <div id="alignArea" style="display:none;margin-top:16px;">
+      <div class="hint" id="alignHint">คลิกมุม 1/4: <b>บนซ้าย</b></div>
+      <div class="canvas-wrap">
+        <canvas id="uploadCanvas"></canvas>
+        <div class="scan-line" id="scanLine"></div>
+      </div>
+      <div class="row" style="margin-top:14px;">
+        <div>
+          <label class="field-label">ความไว (ยิ่งน้อยยิ่งต้องระบายเข้มชัด)</label>
+          <input type="number" id="threshold" value="165" min="60" max="240" />
+        </div>
+        <div style="align-self:flex-end;">
+          <button class="btn" id="detectBtn" onclick="runDetection()" disabled>ตรวจคำตอบอัตโนมัติ</button>
+          <button class="btn ghost" onclick="resetAlign()">รีเซ็ตจุดอ้างอิง</button>
+        </div>
+      </div>
+    </div>
+    <div id="reviewArea" style="display:none;margin-top:20px;">
+      <div class="row">
+        <div>
+          <label class="field-label">ชั้นเรียน</label>
+          <select id="reviewClass" onchange="lookupStudentName()"></select>
+        </div>
+        <div>
+          <label class="field-label">เลขที่</label>
+          <input type="number" id="studentId" placeholder="เช่น 12" min="1" oninput="lookupStudentName()"/>
+        </div>
+        <div>
+          <label class="field-label">ชื่อ-นามสกุลนักเรียน</label>
+          <input type="text" id="studentName" placeholder="จะขึ้นชื่อให้อัตโนมัติจากทะเบียน"/>
+        </div>
+      </div>
+      <div class="hint" id="nameLookupHint">เลือกชั้นและกรอกเลขที่ ระบบจะขึ้นชื่อให้อัตโนมัติจากทะเบียนนักเรียน</div>
+      <div class="hint">ตรวจสอบคำตอบที่ตรวจพบ หากผิดพลาดให้แก้ไขก่อนบันทึก</div>
+      <table class="review" id="reviewTable"></table>
+      <div class="btn-row">
+        <div>
+          <div class="score-cap">คะแนนรวม</div>
+          <div class="score-big" id="liveScore">0 / 0</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="saveResult()">บันทึกผลคะแนนนี้</button>
+        <button class="btn ghost" onclick="resetScanFlow()">สแกนแผ่นถัดไป</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="sheet" id="step4" style="display:none;">
+    <h2 class="step-title">สรุปผลคะแนนของข้อสอบนี้</h2>
+    <p class="step-desc">รายชื่อนักเรียนที่บันทึกไว้ในข้อสอบนี้ พร้อมสถิติความยากง่ายรายข้อ</p>
+    <div id="summaryTableWrap"></div>
+    <h3 style="font-size:15px;margin-top:26px;">อัตราตอบถูกรายข้อ</h3>
+    <div id="statBars"></div>
+    <div class="btn-row">
+      <button class="btn" onclick="exportCSV()">ส่งออกเป็น CSV</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModal">
+  <div class="modal-card">
+    <h3>แก้ไขผลคะแนน</h3>
+    <div class="edit-name-fields">
+      <div style="flex:1;">
+        <label class="field-label">ชั้นเรียน</label>
+        <select id="editClass"></select>
+      </div>
+      <div style="flex:1;">
+        <label class="field-label">ชื่อ-นามสกุล</label>
+        <input type="text" id="editName"/>
+      </div>
+      <div style="flex:1;">
+        <label class="field-label">เลขที่</label>
+        <input type="text" id="editSid"/>
+      </div>
+    </div>
+    <table class="review" id="editTable"></table>
+    <div class="btn-row">
+      <button class="btn" onclick="saveEditedRecord()">บันทึกการแก้ไข</button>
+      <button class="btn secondary" onclick="deleteRecordFromModal()">ลบข้อมูลนี้</button>
+      <button class="btn ghost" onclick="closeEditModal()">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { supabase, requireSession, getProfile, logout } from './shared/supabaseClient.js';
+window.doLogout = logout;
+
+const LETTERS = ['ก','ข','ค','ง','จ'];
+let session, profile;
+let rosterCache = {};   // { className: [ [seat_no, full_name], ... ] }
+let classList = [];
+
+let state = {
+  examId: null,
+  numQuestions: 20,
+  numChoices: 4,
+  answerKey: [],
+  layout: null,
+  uploadImg: null,
+  alignPoints: [],
+  detected: [],
+  classStudents: [],
+  studentIdx: 0,
+};
+
+// ---------- AUTH + BOOTSTRAP ----------
+async function init(){
+  session = await requireSession('index.html');
+  if(!session) return;
+  profile = await getProfile(session.user.id);
+  if(profile && profile.role === 'admin'){
+    // admins can still use the app, but usually manage via admin.html
+  }
+  document.getElementById('whoami').textContent = `ครู: ${profile?.display_name || profile?.username || ''}`;
+  await loadClassList();
+  rebuildKeyGrid();
+  await loadExamPicker();
+}
+
+async function loadClassList(){
+  const { data, error } = await supabase.from('students').select('class_name').order('class_name');
+  if(error){ console.error(error); classList = []; }
+  else classList = [...new Set((data||[]).map(r=>r.class_name))];
+  const opts = '<option value="">— ไม่ระบุ / อื่นๆ —</option>' + classList.map(c=>`<option value="${c}">${c}</option>`).join('');
+  document.getElementById('classSelect').innerHTML = opts;
+  document.getElementById('reviewClass').innerHTML = opts;
+  document.getElementById('editClass').innerHTML = opts;
+}
+
+async function fetchStudents(className){
+  if(!className) return [];
+  if(rosterCache[className]) return rosterCache[className];
+  const { data, error } = await supabase
+    .from('students').select('seat_no, full_name')
+    .eq('class_name', className).order('seat_no');
+  if(error){ console.error(error); return []; }
+  const list = (data||[]).map(r=>[r.seat_no, r.full_name]);
+  rosterCache[className] = list;
+  return list;
+}
+
+window.onClassChange = async function(){
+  await refreshClassStudentList();
+  drawTemplate(); updateStudentNavUI();
+};
+
+// ---------- EXAM PICKER ----------
+async function loadExamPicker(){
+  const { data, error } = await supabase
+    .from('exams').select('id, title, class_name, created_at')
+    .order('created_at', { ascending:false });
+  const sel = document.getElementById('examPicker');
+  let opts = '<option value="">— สร้างข้อสอบใหม่ —</option>';
+  (data||[]).forEach(e=>{
+    opts += `<option value="${e.id}">${e.title} ${e.class_name?('· '+e.class_name):''} (${new Date(e.created_at).toLocaleDateString('th-TH')})</option>`;
+  });
+  sel.innerHTML = opts;
+}
+
+window.onPickExam = async function(){
+  const id = document.getElementById('examPicker').value;
+  if(!id){
+    state.examId = null;
+    document.getElementById('examTitle').value = 'แบบทดสอบ';
+    document.getElementById('classSelect').value = '';
+    state.answerKey = [];
+    document.getElementById('numQuestions').value = 20;
+    setNumChoices(4);
+    rebuildKeyGrid();
+    return;
+  }
+  const { data, error } = await supabase.from('exams').select('*').eq('id', id).single();
+  if(error || !data){ alert('โหลดข้อสอบไม่สำเร็จ'); return; }
+  state.examId = data.id;
+  document.getElementById('examTitle').value = data.title;
+  document.getElementById('classSelect').value = data.class_name || '';
+  document.getElementById('numQuestions').value = data.num_questions;
+  state.numChoices = data.num_choices;
+  document.querySelectorAll('#choiceToggle button').forEach(b=>b.classList.toggle('active', Number(b.dataset.n)===state.numChoices));
+  state.answerKey = data.answer_key || [];
+  rebuildKeyGrid();
+};
+
+// ---------- NAV ----------
+window.goStep = async function(n){
+  for(let i=1;i<=4;i++) document.getElementById('step'+i).style.display = (i===n?'block':'none');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector(`.tab[data-step="${n}"]`).classList.add('active');
+  if(n===2){ await refreshClassStudentList(); drawTemplate(); updateStudentNavUI(); }
+  if(n===3 && document.getElementById('reviewClass').value===''){
+    document.getElementById('reviewClass').value = document.getElementById('classSelect').value;
+  }
+  if(n===4) await renderSummary();
+};
+
+window.setNumChoices = function(n){
+  state.numChoices = n;
+  document.querySelectorAll('#choiceToggle button').forEach(b=>b.classList.toggle('active', Number(b.dataset.n)===n));
+  rebuildKeyGrid();
+};
+
+function rebuildKeyGrid(){
+  const nq = Math.max(1, Math.min(120, Number(document.getElementById('numQuestions').value)||20));
+  state.numQuestions = nq;
+  if(!state.answerKey.length) state.answerKey = new Array(nq).fill(null);
+  else{
+    const nk = new Array(nq).fill(null);
+    for(let i=0;i<Math.min(nq,state.answerKey.length);i++) nk[i]=state.answerKey[i];
+    state.answerKey = nk;
+  }
+  const grid = document.getElementById('keyGrid');
+  grid.innerHTML='';
+  for(let q=0;q<nq;q++){
+    const cell = document.createElement('div');
+    cell.className='key-cell';
+    const qn = document.createElement('div');
+    qn.className='qn'; qn.textContent = String(q+1).padStart(2,'0');
+    cell.appendChild(qn);
+    for(let c=0;c<state.numChoices;c++){
+      const b = document.createElement('div');
+      b.className='bubble'+(state.answerKey[q]===c?' on':'');
+      b.textContent = LETTERS[c];
+      b.onclick = ()=>{ state.answerKey[q]=c; rebuildKeyGrid(); };
+      cell.appendChild(b);
+    }
+    grid.appendChild(cell);
+  }
+}
+window.rebuildKeyGrid = rebuildKeyGrid;
+
+window.saveConfigAndNext = async function(){
+  if(state.answerKey.some(a=>a===null)){
+    if(!confirm('ยังมีบางข้อที่ยังไม่ได้กำหนดเฉลย ต้องการดำเนินการต่อหรือไม่?')) return;
+  }
+  const payload = {
+    teacher_id: session.user.id,
+    title: document.getElementById('examTitle').value,
+    class_name: document.getElementById('classSelect').value || null,
+    num_questions: state.numQuestions,
+    num_choices: state.numChoices,
+    answer_key: state.answerKey
+  };
+  try{
+    if(state.examId){
+      const { error } = await supabase.from('exams').update(payload).eq('id', state.examId);
+      if(error) throw error;
+    }else{
+      const { data, error } = await supabase.from('exams').insert(payload).select().single();
+      if(error) throw error;
+      state.examId = data.id;
+    }
+    await loadExamPicker();
+    document.getElementById('examPicker').value = state.examId;
+    document.getElementById('d1').textContent='✓ ';
+    await goStep(2);
+  }catch(e){
+    alert('บันทึกไม่สำเร็จ: '+e.message);
+  }
+};
+
+// ---------- TEMPLATE ----------
+async function refreshClassStudentList(){
+  const cls = document.getElementById('classSelect').value;
+  state.classStudents = cls ? await fetchStudents(cls) : [];
+  state.studentIdx = 0;
+}
+
+function currentStudent(){
+  if(state.classStudents.length>0){
+    const [sid,name] = state.classStudents[state.studentIdx];
+    return {sid, name};
+  }
+  return null;
+}
+
+function updateStudentNavUI(){
+  const nav = document.getElementById('studentNav');
+  const pdfRow = document.getElementById('classPdfRow');
+  if(state.classStudents.length===0){ nav.style.display='none'; pdfRow.style.display='none'; return; }
+  nav.style.display='block'; pdfRow.style.display='flex';
+  const [sid,name] = state.classStudents[state.studentIdx];
+  document.getElementById('studentNavLabel').innerHTML = `กำลังแสดงใบของ <b>${name}</b> (เลขที่ ${sid}) &nbsp;·&nbsp; ${state.studentIdx+1}/${state.classStudents.length} คน`;
+}
+window.prevStudent = function(){
+  if(state.classStudents.length===0) return;
+  state.studentIdx = (state.studentIdx-1+state.classStudents.length) % state.classStudents.length;
+  drawTemplate(); updateStudentNavUI();
+};
+window.nextStudent = function(){
+  if(state.classStudents.length===0) return;
+  state.studentIdx = (state.studentIdx+1) % state.classStudents.length;
+  drawTemplate(); updateStudentNavUI();
+};
+
+window.downloadClassPdf = async function(){
+  if(state.classStudents.length===0){ alert('กรุณาเลือกชั้นเรียนที่มีรายชื่อนักเรียนก่อน'); return; }
+  const canvas = document.getElementById('templateCanvas');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit:'pt', format:[canvas.width, canvas.height] });
+  const savedIdx = state.studentIdx;
+  for(let i=0;i<state.classStudents.length;i++){
+    state.studentIdx = i;
+    drawTemplate();
+    const dataUrl = canvas.toDataURL('image/png');
+    if(i>0) pdf.addPage([canvas.width, canvas.height]);
+    pdf.addImage(dataUrl, 'PNG', 0, 0, canvas.width, canvas.height);
+  }
+  state.studentIdx = savedIdx;
+  drawTemplate();
+  const cls = document.getElementById('classSelect').value;
+  pdf.save(`กระดาษคำตอบ-${cls}.pdf`);
+};
+
+function drawTemplate(){
+  const canvas = document.getElementById('templateCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const BLACK='#111111', GRAY='#555555', LINE='#999999';
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,W,H);
+
+  const markerSize = 22, margin = 30;
+  const markers = [
+    {x:margin, y:margin}, {x:W-margin-markerSize, y:margin},
+    {x:margin, y:H-margin-markerSize}, {x:W-margin-markerSize, y:H-margin-markerSize}
+  ];
+  ctx.fillStyle = BLACK;
+  markers.forEach(m=> ctx.fillRect(m.x, m.y, markerSize, markerSize));
+
+  ctx.strokeStyle = BLACK; ctx.lineWidth = 2;
+  ctx.strokeRect(90, 20, W-180, 66);
+  ctx.textAlign='center'; ctx.fillStyle = BLACK;
+  ctx.font = '700 22px "IBM Plex Sans Thai", sans-serif';
+  ctx.fillText(document.getElementById('examTitle').value || 'แบบทดสอบ', W/2, 50);
+  ctx.font = '600 12px "IBM Plex Mono", monospace'; ctx.fillStyle = GRAY;
+  ctx.fillText('กระดาษคำตอบปรนัย  ·  ระบายให้เต็มวงด้วยดินสอหรือปากกาสีเข้ม', W/2, 74);
+
+  const cls = document.getElementById('classSelect') ? document.getElementById('classSelect').value : '';
+  const student = currentStudent();
+  ctx.textAlign='left';
+  ctx.font='13px "IBM Plex Sans Thai", sans-serif'; ctx.fillStyle=BLACK;
+  ctx.fillText('ชื่อ-นามสกุล', 90, 118);
+  if(student && student.name){
+    ctx.font='700 15px "IBM Plex Sans Thai", sans-serif';
+    ctx.fillText(student.name, 178, 118);
+    ctx.font='13px "IBM Plex Sans Thai", sans-serif';
+  }else{
+    ctx.strokeStyle=LINE; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(175,120); ctx.lineTo(430,120); ctx.stroke();
+  }
+  ctx.fillText('ชั้น', 450, 118);
+  if(cls){
+    ctx.font='700 13px "IBM Plex Sans Thai", sans-serif';
+    ctx.fillText(cls, 480, 118);
+    ctx.font='13px "IBM Plex Sans Thai", sans-serif';
+  }else{
+    ctx.strokeStyle=LINE; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(480,120); ctx.lineTo(600,120); ctx.stroke();
+  }
+  ctx.fillText('เลขที่', 620, 118);
+  if(student && student.sid){
+    ctx.font='700 15px "IBM Plex Mono", monospace';
+    ctx.fillText(String(student.sid), 665, 118);
+    ctx.font='13px "IBM Plex Sans Thai", sans-serif';
+  }else{
+    ctx.strokeStyle=LINE; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(660,120); ctx.lineTo(W-90,120); ctx.stroke();
+  }
+
+  const legY = 150, legX0 = 90;
+  ctx.font='600 11px "IBM Plex Mono", monospace'; ctx.fillStyle=GRAY; ctx.textAlign='left';
+  ctx.fillText('ตัวอย่างการระบายคำตอบ', legX0, legY-14);
+  const legendItems = [ {type:'empty', label:'ยังไม่ตอบ'}, {type:'filled', label:'ถูกต้อง'}, {type:'x', label:'ไม่ถูกต้อง'} ];
+  legendItems.forEach((item,i)=>{
+    const cx = legX0+14+i*130, cy = legY;
+    ctx.beginPath(); ctx.arc(cx,cy,9,0,Math.PI*2);
+    ctx.strokeStyle=BLACK; ctx.lineWidth=1.4; ctx.stroke();
+    if(item.type==='filled'){ ctx.fillStyle=BLACK; ctx.beginPath(); ctx.arc(cx,cy,6.5,0,Math.PI*2); ctx.fill(); }
+    if(item.type==='x'){
+      ctx.strokeStyle=BLACK; ctx.lineWidth=1.6;
+      ctx.beginPath(); ctx.moveTo(cx-4.5,cy-4.5); ctx.lineTo(cx+4.5,cy+4.5);
+      ctx.moveTo(cx+4.5,cy-4.5); ctx.lineTo(cx-4.5,cy+4.5); ctx.stroke();
+    }
+    ctx.font='11px "IBM Plex Sans Thai", sans-serif'; ctx.fillStyle=GRAY; ctx.textAlign='left';
+    ctx.fillText(item.label, cx+16, cy+4);
+  });
+
+  ctx.strokeStyle=BLACK; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(90,178); ctx.lineTo(W-90,178); ctx.stroke();
+
+  const startY = 218, perCol = 25;
+  const numCols = Math.ceil(state.numQuestions / perCol);
+  const colWidth = (W - 2*90) / numCols;
+  const rowHeight = 30, bubbleR = 9;
+
+  for(let col=0; col<numCols; col++){
+    const baseX = 90 + col*colWidth;
+    ctx.font='700 11px "IBM Plex Mono", monospace'; ctx.fillStyle=BLACK; ctx.textAlign='left';
+    ctx.fillText('ข้อ', baseX, startY-16);
+    for(let c=0;c<state.numChoices;c++){
+      const cx = baseX + 40 + c*26;
+      ctx.textAlign='center'; ctx.fillStyle=BLACK;
+      ctx.fillText(LETTERS[c], cx, startY-16);
+    }
+    if(col>0){
+      ctx.strokeStyle=LINE; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(baseX-16, startY-30); ctx.lineTo(baseX-16, startY-30+Math.min(perCol,state.numQuestions-((col-1)*perCol))*rowHeight);
+      ctx.stroke();
+    }
+  }
+
+  const bubblePositions = [];
+  for(let q=0; q<state.numQuestions; q++){
+    const col = Math.floor(q/perCol);
+    const rowInCol = q % perCol;
+    const baseX = 90 + col*colWidth;
+    const y = startY + rowInCol*rowHeight;
+    ctx.strokeStyle=GRAY; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(baseX+2, y, 11, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = BLACK; ctx.textAlign='center';
+    ctx.font='700 11px "IBM Plex Mono", monospace';
+    ctx.fillText(String(q+1).padStart(2,'0'), baseX+2, y+4);
+    const rowBubbles = [];
+    for(let c=0;c<state.numChoices;c++){
+      const cx = baseX + 40 + c*26, cy = y;
+      ctx.beginPath(); ctx.arc(cx, cy, bubbleR, 0, Math.PI*2);
+      ctx.strokeStyle = BLACK; ctx.lineWidth=1.4; ctx.stroke();
+      rowBubbles.push({xNorm: cx/W, yNorm: cy/H});
+    }
+    bubblePositions.push(rowBubbles);
+  }
+
+  ctx.strokeStyle=LINE; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(90,1000); ctx.lineTo(W-90,1000); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font='10.5px "IBM Plex Mono", monospace'; ctx.fillStyle=GRAY; ctx.textAlign='center';
+  ctx.fillText('ตรวจให้คะแนนด้วยระบบตรวจข้อสอบอัตโนมัติ  ·  ห้ามพับกระดาษหรือครอบตัดกรอบมุมดำ', W/2, 1018);
+
+  state.layout = {
+    markers: markers.map(m=>({xNorm:(m.x+markerSize/2)/W, yNorm:(m.y+markerSize/2)/H})),
+    bubbles: bubblePositions
+  };
+}
+window.drawTemplate = drawTemplate;
+
+window.downloadTemplate = function(){
+  const canvas = document.getElementById('templateCanvas');
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'answer-sheet-template.png';
+  a.click();
+};
+
+// ---------- UPLOAD & ALIGN ----------
+window.handleFile = function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    img.onload = ()=>{
+      state.uploadImg = img;
+      state.alignPoints = [];
+      document.getElementById('alignArea').style.display='block';
+      document.getElementById('reviewArea').style.display='none';
+      document.getElementById('detectBtn').disabled = true;
+      drawUploadCanvas();
+      document.getElementById('alignHint').innerHTML = 'คลิกมุม 1/4: <b>บนซ้าย</b>';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+function drawUploadCanvas(){
+  const canvas = document.getElementById('uploadCanvas');
+  const img = state.uploadImg;
+  const maxW = 800;
+  const scale = Math.min(1, maxW/img.width);
+  canvas.width = img.width*scale; canvas.height = img.height*scale;
+  canvas.style.width = canvas.width+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  state.alignPoints.forEach((p,i)=>drawMarkerPoint(ctx,p,i+1));
+  canvas.onclick = onCanvasAlignClick;
+}
+function drawMarkerPoint(ctx,p,idx){
+  ctx.fillStyle = '#E8B93B';
+  ctx.beginPath(); ctx.arc(p.x,p.y,7,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#232946'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle='#232946'; ctx.font='700 11px "IBM Plex Mono", monospace'; ctx.textAlign='center';
+  ctx.fillText(String(idx), p.x, p.y-11);
+}
+function getCanvasCoords(e, canvas){
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width/rect.width, scaleY = canvas.height/rect.height;
+  return { x: (e.clientX-rect.left)*scaleX, y: (e.clientY-rect.top)*scaleY };
+}
+const CORNER_LABELS = ['บนซ้าย','บนขวา','ล่างซ้าย','ล่างขวา'];
+function onCanvasAlignClick(e){
+  if(state.alignPoints.length>=4) return;
+  const canvas = document.getElementById('uploadCanvas');
+  const p = getCanvasCoords(e, canvas);
+  state.alignPoints.push(p);
+  const ctx = canvas.getContext('2d');
+  drawMarkerPoint(ctx,p,state.alignPoints.length);
+  if(state.alignPoints.length<4){
+    document.getElementById('alignHint').innerHTML = `คลิกมุม ${state.alignPoints.length+1}/4: <b>${CORNER_LABELS[state.alignPoints.length]}</b>`;
+  }else{
+    document.getElementById('alignHint').innerHTML = 'ครบ 4 จุดแล้ว ✓ กด "ตรวจคำตอบอัตโนมัติ" ได้เลย';
+    document.getElementById('detectBtn').disabled = false;
+  }
+}
+window.resetAlign = function(){
+  state.alignPoints = [];
+  document.getElementById('detectBtn').disabled = true;
+  drawUploadCanvas();
+  document.getElementById('alignHint').innerHTML = 'คลิกมุม 1/4: <b>บนซ้าย</b>';
+};
+window.resetScanFlow = function(){
+  state.uploadImg = null; state.alignPoints=[]; state.detected=[];
+  document.getElementById('fileInput').value='';
+  document.getElementById('alignArea').style.display='none';
+  document.getElementById('reviewArea').style.display='none';
+  document.getElementById('studentName').value='';
+  document.getElementById('studentId').value='';
+};
+
+// ---------- HOMOGRAPHY ----------
+function solveLinear(A,b){
+  const n=b.length;
+  const M=A.map((row,i)=>row.concat([b[i]]));
+  for(let col=0; col<n; col++){
+    let piv=col;
+    for(let r=col+1;r<n;r++) if(Math.abs(M[r][col])>Math.abs(M[piv][col])) piv=r;
+    [M[col],M[piv]]=[M[piv],M[col]];
+    const pv=M[col][col]; if(Math.abs(pv)<1e-12) continue;
+    for(let c=col;c<=n;c++) M[col][c]/=pv;
+    for(let r=0;r<n;r++){ if(r===col) continue; const f=M[r][col]; for(let c=col;c<=n;c++) M[r][c]-=f*M[col][c]; }
+  }
+  return M.map(row=>row[n]);
+}
+function computeHomography(src, dst){
+  const A=[], b=[];
+  for(let i=0;i<4;i++){
+    const {x,y}=src[i], {x:X,y:Y}=dst[i];
+    A.push([x,y,1,0,0,0,-x*X,-y*X]); b.push(X);
+    A.push([0,0,0,x,y,1,-x*Y,-y*Y]); b.push(Y);
+  }
+  return solveLinear(A,b);
+}
+function applyH(h, x, y){
+  const [a,bb,c,d,e,f,g,hh]=h;
+  const denom = g*x+hh*y+1;
+  return { x:(a*x+bb*y+c)/denom, y:(d*x+e*y+f)/denom };
+}
+function sampleDarkness(ctx, cx, cy, r){
+  const x0=Math.max(0,Math.round(cx-r)), y0=Math.max(0,Math.round(cy-r));
+  const w=Math.round(r*2), h=Math.round(r*2);
+  let data;
+  try{ data = ctx.getImageData(x0,y0,w,h).data; }catch(e){ return 255; }
+  let sum=0,count=0;
+  for(let i=0;i<data.length;i+=4){ sum += 0.299*data[i]+0.587*data[i+1]+0.114*data[i+2]; count++; }
+  return count? sum/count : 255;
+}
+window.runDetection = function(){
+  const canvas = document.getElementById('uploadCanvas');
+  const ctx = canvas.getContext('2d');
+  const templateCorners = state.layout.markers.map(m=>({x:m.xNorm,y:m.yNorm}));
+  const clicked = state.alignPoints;
+  const h = computeHomography(templateCorners, clicked);
+  const scanLine = document.getElementById('scanLine');
+  scanLine.classList.remove('active'); void scanLine.offsetWidth; scanLine.classList.add('active');
+  setTimeout(()=>{
+    const thresh = Number(document.getElementById('threshold').value)||165;
+    const detected = [];
+    drawUploadCanvas();
+    const bubbleR = Math.max(5, canvas.width*0.012);
+    for(let q=0;q<state.numQuestions;q++){
+      const darks = [];
+      for(let c=0;c<state.numChoices;c++){
+        const pos = state.layout.bubbles[q][c];
+        const pt = applyH(h, pos.xNorm, pos.yNorm);
+        const d = sampleDarkness(ctx, pt.x, pt.y, bubbleR*0.7);
+        darks.push({c, d, pt});
+      }
+      darks.sort((a,b)=>a.d-b.d);
+      let chosen = null;
+      if(darks[0].d < thresh && (darks.length<2 || (darks[1].d - darks[0].d) > 12)) chosen = darks[0].c;
+      detected.push(chosen);
+      darks.forEach(d=>{
+        ctx.beginPath(); ctx.arc(d.pt.x, d.pt.y, bubbleR, 0, Math.PI*2);
+        ctx.strokeStyle = (chosen===d.c)? '#3F7D58' : 'rgba(85,82,77,0.35)';
+        ctx.lineWidth = (chosen===d.c)? 2.4:1;
+        ctx.stroke();
+      });
+    }
+    state.detected = detected;
+    renderReview();
+  }, 250);
+};
+
+function renderReview(){
+  document.getElementById('reviewArea').style.display='block';
+  const table = document.getElementById('reviewTable');
+  let html = '<tr><th>ข้อ</th><th>ตรวจพบ</th><th>เฉลย</th><th>ผล</th><th>แก้ไข</th></tr>';
+  for(let q=0;q<state.numQuestions;q++){
+    const det = state.detected[q];
+    const key = state.answerKey[q];
+    const correct = det!==null && det===key;
+    let tag = det===null? '<span class="tag blank">ว่าง</span>' : (correct? '<span class="tag ok">ถูก</span>':'<span class="tag no">ผิด</span>');
+    let opts = '<option value="-1">ว่าง</option>';
+    for(let c=0;c<state.numChoices;c++) opts += `<option value="${c}" ${det===c?'selected':''}>${LETTERS[c]}</option>`;
+    html += `<tr><td>${q+1}</td><td>${det===null?'—':LETTERS[det]}</td><td>${key==null?'—':LETTERS[key]}</td><td>${tag}</td><td><select class="override" onchange="overrideAnswer(${q}, this.value)">${opts}</select></td></tr>`;
+  }
+  table.innerHTML = html;
+  updateLiveScore();
+}
+window.overrideAnswer = function(q, val){
+  state.detected[q] = Number(val)===-1? null : Number(val);
+  renderReview();
+};
+function updateLiveScore(){
+  let correct=0;
+  for(let q=0;q<state.numQuestions;q++) if(state.detected[q]!==null && state.detected[q]===state.answerKey[q]) correct++;
+  document.getElementById('liveScore').textContent = `${correct} / ${state.numQuestions}`;
+}
+
+window.lookupStudentName = async function(){
+  const cls = document.getElementById('reviewClass').value;
+  const sid = document.getElementById('studentId').value.trim();
+  const hint = document.getElementById('nameLookupHint');
+  if(!hint) return;
+  if(cls && sid){
+    const list = await fetchStudents(cls);
+    const found = list.find(([s])=>String(s)===sid);
+    if(found){
+      document.getElementById('studentName').value = found[1];
+      hint.textContent = '✓ พบในทะเบียน: ' + found[1];
+    }else{
+      hint.textContent = 'ไม่พบเลขที่นี้ในทะเบียนของชั้นที่เลือก กรุณากรอกชื่อเอง';
+    }
+  }else{
+    hint.textContent = 'เลือกชั้นและกรอกเลขที่ ระบบจะขึ้นชื่อให้อัตโนมัติจากทะเบียนนักเรียน';
+  }
+};
+
+window.saveResult = async function(){
+  if(!state.examId){ alert('กรุณาบันทึกเฉลยในขั้นตอนที่ 1 ก่อน'); return; }
+  const name = document.getElementById('studentName').value.trim() || '(ไม่ระบุชื่อ)';
+  const sid = document.getElementById('studentId').value.trim();
+  const cls = document.getElementById('reviewClass').value;
+  let correct=0;
+  for(let q=0;q<state.numQuestions;q++) if(state.detected[q]!==null && state.detected[q]===state.answerKey[q]) correct++;
+  const record = {
+    exam_id: state.examId, teacher_id: session.user.id,
+    class_name: cls || null, seat_no: sid ? Number(sid) : null,
+    student_name: name, score: correct, total: state.numQuestions,
+    answers: state.detected
+  };
+  try{
+    const { error } = await supabase.from('exam_results').insert(record);
+    if(error) throw error;
+    alert('บันทึกผลของ '+name+' เรียบร้อย: '+correct+'/'+state.numQuestions);
+    document.getElementById('d3').textContent='✓ ';
+    window.resetScanFlow();
+  }catch(e){
+    alert('บันทึกไม่สำเร็จ: '+e.message);
+  }
+};
+
+// ---------- SUMMARY ----------
+async function renderSummary(){
+  const wrap = document.getElementById('summaryTableWrap');
+  wrap.innerHTML = 'กำลังโหลด...';
+  if(!state.examId){
+    wrap.innerHTML = '<div class="hint">ยังไม่ได้เลือก/บันทึกข้อสอบ กรุณาเริ่มจากขั้นตอนที่ 1</div>';
+    document.getElementById('statBars').innerHTML=''; return;
+  }
+  const { data: records, error } = await supabase
+    .from('exam_results').select('*').eq('exam_id', state.examId)
+    .order('score', { ascending:false });
+  if(error){ wrap.innerHTML = '<div class="error">โหลดผลไม่สำเร็จ: '+error.message+'</div>'; return; }
+  if(!records || records.length===0){
+    wrap.innerHTML = '<div class="hint">ยังไม่มีผลคะแนนที่บันทึกไว้สำหรับข้อสอบนี้</div>';
+    document.getElementById('statBars').innerHTML=''; return;
+  }
+  let html = '<div class="hint">คลิกที่แถวเพื่อดูรายละเอียดคำตอบ แก้ไข หรือลบ</div><table class="review"><tr><th>อันดับ</th><th>ชั้น</th><th>ชื่อ</th><th>เลขที่</th><th>คะแนน</th><th>%</th></tr>';
+  records.forEach((r,i)=>{
+    const pct = Math.round((r.score/r.total)*100);
+    html += `<tr class="row-clickable" onclick="openEditRecord('${r.id}')"><td>${i+1}</td><td>${r.class_name||'—'}</td><td>${r.student_name}</td><td>${r.seat_no||'—'}</td><td>${r.score}/${r.total}</td><td>${pct}%</td></tr>`;
+  });
+  html += '</table>';
+  wrap.innerHTML = html;
+
+  const totalsPerQ = new Array(state.numQuestions).fill(0);
+  records.forEach(r=>{
+    (r.answers||[]).forEach((a,q)=>{ if(q<state.numQuestions && a!==null && a===state.answerKey[q]) totalsPerQ[q]++; });
+  });
+  let barsHtml='';
+  for(let q=0;q<state.numQuestions;q++){
+    const pct = records.length? Math.round((totalsPerQ[q]/records.length)*100) : 0;
+    barsHtml += `<div class="stat-bar-row"><div class="qlabel">Q${String(q+1).padStart(2,'0')}</div><div class="stat-bar-track"><div class="stat-bar-fill ${pct<50?'low':''}" style="width:${pct}%;"></div></div><div class="stat-pct">${pct}%</div></div>`;
+  }
+  document.getElementById('statBars').innerHTML = barsHtml;
+  window._lastRecords = records;
+}
+window.renderSummary = renderSummary;
+
+let editingId = null;
+window.openEditRecord = function(id){
+  const rec = (window._lastRecords||[]).find(r=>r.id===id);
+  if(!rec) return;
+  editingId = id;
+  document.getElementById('editClass').value = rec.class_name || '';
+  document.getElementById('editName').value = rec.student_name;
+  document.getElementById('editSid').value = rec.seat_no || '';
+  let html = '<tr><th>ข้อ</th><th>เฉลย</th><th>คำตอบ</th></tr>';
+  for(let q=0;q<state.numQuestions;q++){
+    const key = state.answerKey[q];
+    const ans = rec.answers ? rec.answers[q] : null;
+    let opts = '<option value="-1">ว่าง</option>';
+    for(let c=0;c<state.numChoices;c++) opts += `<option value="${c}" ${ans===c?'selected':''}>${LETTERS[c]}</option>`;
+    html += `<tr><td>${q+1}</td><td>${key==null?'—':LETTERS[key]}</td><td><select class="override" data-q="${q}">${opts}</select></td></tr>`;
+  }
+  document.getElementById('editTable').innerHTML = html;
+  document.getElementById('editModal').style.display='flex';
+};
+window.closeEditModal = function(){ document.getElementById('editModal').style.display='none'; editingId=null; };
+window.saveEditedRecord = async function(){
+  if(editingId===null) return;
+  const selects = document.querySelectorAll('#editTable select.override');
+  const answers = new Array(state.numQuestions).fill(null);
+  selects.forEach(s=>{ const q=Number(s.dataset.q), v=Number(s.value); answers[q] = v===-1? null : v; });
+  let correct=0;
+  answers.forEach((a,q)=>{ if(a!==null && a===state.answerKey[q]) correct++; });
+  const payload = {
+    class_name: document.getElementById('editClass').value || null,
+    student_name: document.getElementById('editName').value.trim() || '(ไม่ระบุชื่อ)',
+    seat_no: document.getElementById('editSid').value ? Number(document.getElementById('editSid').value) : null,
+    score: correct, total: state.numQuestions, answers
+  };
+  try{
+    const { error } = await supabase.from('exam_results').update(payload).eq('id', editingId);
+    if(error) throw error;
+    window.closeEditModal();
+    await renderSummary();
+  }catch(e){ alert('บันทึกการแก้ไขไม่สำเร็จ: '+e.message); }
+};
+window.deleteRecordFromModal = async function(){
+  if(editingId===null) return;
+  if(!confirm('ต้องการลบข้อมูลนักเรียนคนนี้หรือไม่?')) return;
+  try{
+    const { error } = await supabase.from('exam_results').delete().eq('id', editingId);
+    if(error) throw error;
+    window.closeEditModal();
+    await renderSummary();
+  }catch(e){ alert('ลบไม่สำเร็จ: '+e.message); }
+};
+
+window.exportCSV = function(){
+  const records = window._lastRecords || [];
+  if(records.length===0){ alert('ไม่มีข้อมูลให้ส่งออก'); return; }
+  let csv = 'ชั้น,ชื่อ,เลขที่,คะแนน,เต็ม,เปอร์เซ็นต์\n';
+  records.forEach(r=>{
+    const pct = Math.round((r.score/r.total)*100);
+    csv += `"${r.class_name||''}","${r.student_name}","${r.seat_no||''}",${r.score},${r.total},${pct}\n`;
+  });
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'ผลคะแนน.csv'; a.click();
+  URL.revokeObjectURL(url);
+};
+
+init();
+</script>
+</body>
+</html>
