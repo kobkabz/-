@@ -53,7 +53,7 @@
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
     if(error){
-      msg.innerHTML = '<div class="error">เข้าสู่ระบบไม่สำเร็จ: ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง</div>';
+      msg.innerHTML = `<div class="error">เข้าสู่ระบบไม่สำเร็จ: ${error.message} (email ที่ใช้ลอง: ${email})</div>`;
       return;
     }
     const { data: profile } = await supabase
