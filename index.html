@@ -6,7 +6,7 @@
 <title>เข้าสู่ระบบ · ระบบตรวจข้อสอบ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="shared/style.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="wrap narrow">
@@ -35,8 +35,8 @@
 </div>
 
 <script type="module">
-  import { supabase } from './shared/supabaseClient.js';
-  import { usernameToEmail } from './shared/config.js';
+  import { supabase } from './supabaseClient.js';
+  import { usernameToEmail } from './config.js';
 
   window.doLogin = async function(){
     const username = document.getElementById('username').value.trim();

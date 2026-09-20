@@ -6,7 +6,7 @@
 <title>แผงแอดมิน · ระบบตรวจข้อสอบ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="shared/style.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="wrap">
@@ -50,8 +50,8 @@
 </div>
 
 <script type="module">
-  import { supabase, requireSession, getProfile, logout } from './shared/supabaseClient.js';
-  import { SUPABASE_URL, usernameToEmail } from './shared/config.js';
+  import { supabase, requireSession, getProfile, logout } from './supabaseClient.js';
+  import { SUPABASE_URL, usernameToEmail } from './config.js';
 
   window.doLogout = logout;
 
