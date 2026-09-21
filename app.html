@@ -75,45 +75,77 @@
 
   <!-- STEP 1 -->
   <div class="sheet" id="step1">
-    <h2 class="step-title">ตั้งค่าข้อสอบและเฉลย</h2>
-    <p class="step-desc">เลือกข้อสอบเดิม หรือสร้างใหม่ กำหนดจำนวนข้อ จำนวนตัวเลือก แล้วคลิกกำหนดคำตอบที่ถูก</p>
-
+    <h2 class="step-title">วิชาที่สอน</h2>
+    <p class="step-desc">เลือกวิชา (แยกตามชั้นเรียน) ก่อน แล้วค่อยสร้าง/เลือกชุดข้อสอบภายใต้วิชานั้น — สะดวกเวลาสอนหลายวิชาหลายชั้น</p>
     <div class="row">
       <div>
-        <label class="field-label">ข้อสอบของฉัน</label>
-        <select id="examPicker" onchange="onPickExam()"><option value="">— สร้างข้อสอบใหม่ —</option></select>
+        <label class="field-label">วิชา</label>
+        <select id="subjectPicker" onchange="onPickSubject()"><option value="">— เลือกวิชา —</option></select>
+      </div>
+      <div style="align-self:flex-end;">
+        <button class="btn ghost" onclick="toggleNewSubjectForm()">+ เพิ่มวิชาใหม่</button>
       </div>
     </div>
-
-    <div class="row">
-      <div>
-        <label class="field-label">ชื่อข้อสอบ / วิชา</label>
-        <input type="text" id="examTitle" value="แบบทดสอบ" />
-      </div>
-      <div>
-        <label class="field-label">ชั้นเรียน</label>
-        <select id="classSelect" onchange="onClassChange()"></select>
-      </div>
-    </div>
-    <div class="row">
-      <div>
-        <label class="field-label">จำนวนข้อ</label>
-        <input type="number" id="numQuestions" value="20" min="1" max="120" onchange="rebuildKeyGrid()" />
-      </div>
-      <div>
-        <label class="field-label">จำนวนตัวเลือกต่อข้อ</label>
-        <div class="choice-toggle" id="choiceToggle">
-          <button onclick="setNumChoices(4)" class="active" data-n="4">4 (ก-ง)</button>
-          <button onclick="setNumChoices(5)" data-n="5">5 (ก-จ)</button>
+    <div id="newSubjectForm" style="display:none;">
+      <div class="row">
+        <div>
+          <label class="field-label">ชื่อวิชา</label>
+          <input type="text" id="newSubjectName" placeholder="เช่น คณิตศาสตร์, ภาษาไทย"/>
+        </div>
+        <div>
+          <label class="field-label">ชั้นเรียน</label>
+          <select id="newSubjectClass"></select>
         </div>
       </div>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn" onclick="createSubject()">บันทึกวิชา</button>
+        <button class="btn ghost" onclick="toggleNewSubjectForm()">ยกเลิก</button>
+      </div>
     </div>
 
-    <label class="field-label">เฉลย (คลิกที่ตัวเลือกที่ถูกของแต่ละข้อ)</label>
-    <div class="key-grid" id="keyGrid"></div>
+    <div id="noSubjectHint" class="hint">กรุณาเลือกหรือสร้างวิชาก่อน จึงจะสร้าง/แก้ไขชุดข้อสอบได้</div>
 
-    <div class="btn-row">
-      <button class="btn" onclick="saveConfigAndNext()">บันทึกเฉลย และไปพิมพ์กระดาษคำตอบ →</button>
+    <div id="examSection" style="display:none;">
+      <h2 class="step-title" style="margin-top:26px;">ตั้งค่าข้อสอบและเฉลย</h2>
+      <p class="step-desc">เลือกชุดข้อสอบเดิมของวิชานี้ หรือสร้างใหม่ กำหนดจำนวนข้อ จำนวนตัวเลือก แล้วคลิกกำหนดคำตอบที่ถูก</p>
+
+      <div class="row">
+        <div>
+          <label class="field-label">ชุดข้อสอบของวิชานี้</label>
+          <select id="examPicker" onchange="onPickExam()"><option value="">— สร้างชุดข้อสอบใหม่ —</option></select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label class="field-label">ชื่อชุดข้อสอบ (เช่น สอบกลางภาค, แบบทดสอบบทที่ 3)</label>
+          <input type="text" id="examTitle" value="แบบทดสอบ" />
+        </div>
+        <div>
+          <label class="field-label">ชั้นเรียน (มาจากวิชาที่เลือก)</label>
+          <select id="classSelect" onchange="onClassChange()" disabled></select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label class="field-label">จำนวนข้อ</label>
+          <input type="number" id="numQuestions" value="20" min="1" max="120" onchange="rebuildKeyGrid()" />
+        </div>
+        <div>
+          <label class="field-label">จำนวนตัวเลือกต่อข้อ</label>
+          <div class="choice-toggle" id="choiceToggle">
+            <button onclick="setNumChoices(4)" class="active" data-n="4">4 (ก-ง)</button>
+            <button onclick="setNumChoices(5)" data-n="5">5 (ก-จ)</button>
+          </div>
+        </div>
+      </div>
+
+      <label class="field-label">เฉลย (คลิกที่ตัวเลือกที่ถูกของแต่ละข้อ)</label>
+      <div class="key-grid" id="keyGrid"></div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="saveConfigAndNext()">บันทึกเฉลย และไปพิมพ์กระดาษคำตอบ →</button>
+      </div>
     </div>
   </div>
 
@@ -144,11 +176,26 @@
   <!-- STEP 3 -->
   <div class="sheet" id="step3" style="display:none;">
     <h2 class="step-title">สแกน/ถ่ายรูป แล้วตรวจอัตโนมัติ</h2>
-    <p class="step-desc">อัปโหลดรูปกระดาษคำตอบที่กรอกแล้ว จากนั้นคลิกจุดสี่เหลี่ยมดำทั้ง 4 มุมตามลำดับ (บนซ้าย → บนขวา → ล่างซ้าย → ล่างขวา)</p>
-    <div id="uploadZone" class="upload-drop" onclick="document.getElementById('fileInput').click()">
-      📄 คลิกเพื่อเลือกรูปภาพกระดาษคำตอบ (ถ่ายรูป/สแกน)
+    <p class="step-desc">เปิดกล้องถ่ายสด หรืออัปโหลดรูปกระดาษคำตอบที่กรอกแล้ว จากนั้นคลิกจุดสี่เหลี่ยมดำทั้ง 4 มุมตามลำดับ (บนซ้าย → บนขวา → ล่างซ้าย → ล่างขวา)</p>
+
+    <div id="captureChoice" class="btn-row" style="margin-top:0;">
+      <button class="btn" onclick="openCamera()">📷 เปิดกล้องสแกน</button>
+      <button class="btn secondary" onclick="document.getElementById('fileInput').click()">📄 อัปโหลดรูปภาพ</button>
       <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFile(event)"/>
     </div>
+
+    <div id="cameraArea" style="display:none;margin-top:16px;">
+      <div class="hint">จัดกระดาษคำตอบให้ขอบตรงกับ<b>กรอบไกด์สีเหลือง</b>ในภาพ แล้วกด "ถ่ายภาพ" — ระบบจะจัดแนวให้อัตโนมัติ ไม่ต้องคลิกมุมเอง</div>
+      <div class="canvas-wrap" style="position:relative;">
+        <video id="cameraVideo" autoplay playsinline style="max-width:100%;border-radius:10px;border:1px solid var(--line);display:block;"></video>
+        <svg id="guideOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></svg>
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="capturePhoto()">📸 ถ่ายภาพ</button>
+        <button class="btn ghost" onclick="closeCamera()">ปิดกล้อง</button>
+      </div>
+    </div>
+
     <div id="alignArea" style="display:none;margin-top:16px;">
       <div class="hint" id="alignHint">คลิกมุม 1/4: <b>บนซ้าย</b></div>
       <div class="canvas-wrap">
@@ -247,6 +294,8 @@ let classList = [];
 
 let state = {
   examId: null,
+  subjectId: null,
+  subjects: [],
   numQuestions: 20,
   numChoices: 4,
   answerKey: [],
@@ -256,6 +305,7 @@ let state = {
   detected: [],
   classStudents: [],
   studentIdx: 0,
+  guidePoints: null,
 };
 
 // ---------- AUTH + BOOTSTRAP ----------
@@ -263,13 +313,10 @@ async function init(){
   session = await requireSession('index.html');
   if(!session) return;
   profile = await getProfile(session.user.id);
-  if(profile && profile.role === 'admin'){
-    // admins can still use the app, but usually manage via admin.html
-  }
   document.getElementById('whoami').textContent = `ครู: ${profile?.display_name || profile?.username || ''}`;
   await loadClassList();
   rebuildKeyGrid();
-  await loadExamPicker();
+  await loadSubjects();
 }
 
 async function loadClassList(){
@@ -280,7 +327,73 @@ async function loadClassList(){
   document.getElementById('classSelect').innerHTML = opts;
   document.getElementById('reviewClass').innerHTML = opts;
   document.getElementById('editClass').innerHTML = opts;
+  document.getElementById('newSubjectClass').innerHTML = opts;
 }
+
+// ---------- SUBJECTS ----------
+async function loadSubjects(){
+  const { data, error } = await supabase
+    .from('subjects').select('id, subject_name, class_name, created_at')
+    .order('created_at', { ascending:false });
+  if(error){ console.error(error); return; }
+  state.subjects = data || [];
+  const sel = document.getElementById('subjectPicker');
+  const prevVal = sel.value;
+  let opts = '<option value="">— เลือกวิชา —</option>';
+  state.subjects.forEach(s=>{
+    opts += `<option value="${s.id}">${s.subject_name}${s.class_name? (' · '+s.class_name) : ''}</option>`;
+  });
+  sel.innerHTML = opts;
+  if(prevVal && state.subjects.some(s=>s.id===prevVal)) sel.value = prevVal;
+}
+
+window.toggleNewSubjectForm = function(){
+  const f = document.getElementById('newSubjectForm');
+  f.style.display = (f.style.display==='none') ? 'block' : 'none';
+};
+
+window.createSubject = async function(){
+  const name = document.getElementById('newSubjectName').value.trim();
+  const cls = document.getElementById('newSubjectClass').value;
+  if(!name){ alert('กรุณากรอกชื่อวิชา'); return; }
+  try{
+    const { data, error } = await supabase.from('subjects').insert({
+      teacher_id: session.user.id, subject_name: name, class_name: cls || null
+    }).select().single();
+    if(error) throw error;
+    document.getElementById('newSubjectName').value='';
+    document.getElementById('newSubjectForm').style.display='none';
+    await loadSubjects();
+    document.getElementById('subjectPicker').value = data.id;
+    await onPickSubject();
+  }catch(e){
+    alert('บันทึกวิชาไม่สำเร็จ: '+e.message);
+  }
+};
+
+window.onPickSubject = async function(){
+  const id = document.getElementById('subjectPicker').value;
+  state.subjectId = id || null;
+  const examSection = document.getElementById('examSection');
+  const hint = document.getElementById('noSubjectHint');
+  if(!state.subjectId){
+    examSection.style.display = 'none';
+    hint.style.display = 'block';
+    return;
+  }
+  hint.style.display = 'none';
+  examSection.style.display = 'block';
+  const subject = state.subjects.find(s=>s.id===state.subjectId);
+  document.getElementById('classSelect').value = subject?.class_name || '';
+  state.examId = null;
+  document.getElementById('examTitle').value = 'แบบทดสอบ';
+  state.answerKey = [];
+  document.getElementById('numQuestions').value = 20;
+  setNumChoices(4);
+  rebuildKeyGrid();
+  await loadExamPicker();
+  await refreshClassStudentList();
+};
 
 async function fetchStudents(className){
   if(!className) return [];
@@ -301,23 +414,26 @@ window.onClassChange = async function(){
 
 // ---------- EXAM PICKER ----------
 async function loadExamPicker(){
+  if(!state.subjectId){ document.getElementById('examPicker').innerHTML=''; return; }
   const { data, error } = await supabase
     .from('exams').select('id, title, class_name, created_at')
+    .eq('subject_id', state.subjectId)
     .order('created_at', { ascending:false });
   const sel = document.getElementById('examPicker');
-  let opts = '<option value="">— สร้างข้อสอบใหม่ —</option>';
+  let opts = '<option value="">— สร้างชุดข้อสอบใหม่ —</option>';
   (data||[]).forEach(e=>{
-    opts += `<option value="${e.id}">${e.title} ${e.class_name?('· '+e.class_name):''} (${new Date(e.created_at).toLocaleDateString('th-TH')})</option>`;
+    opts += `<option value="${e.id}">${e.title} (${new Date(e.created_at).toLocaleDateString('th-TH')})</option>`;
   });
   sel.innerHTML = opts;
 }
 
 window.onPickExam = async function(){
   const id = document.getElementById('examPicker').value;
+  const subject = state.subjects.find(s=>s.id===state.subjectId);
   if(!id){
     state.examId = null;
     document.getElementById('examTitle').value = 'แบบทดสอบ';
-    document.getElementById('classSelect').value = '';
+    document.getElementById('classSelect').value = subject?.class_name || '';
     state.answerKey = [];
     document.getElementById('numQuestions').value = 20;
     setNumChoices(4);
@@ -328,7 +444,7 @@ window.onPickExam = async function(){
   if(error || !data){ alert('โหลดข้อสอบไม่สำเร็จ'); return; }
   state.examId = data.id;
   document.getElementById('examTitle').value = data.title;
-  document.getElementById('classSelect').value = data.class_name || '';
+  document.getElementById('classSelect').value = data.class_name || subject?.class_name || '';
   document.getElementById('numQuestions').value = data.num_questions;
   state.numChoices = data.num_choices;
   document.querySelectorAll('#choiceToggle button').forEach(b=>b.classList.toggle('active', Number(b.dataset.n)===state.numChoices));
@@ -384,11 +500,13 @@ function rebuildKeyGrid(){
 window.rebuildKeyGrid = rebuildKeyGrid;
 
 window.saveConfigAndNext = async function(){
+  if(!state.subjectId){ alert('กรุณาเลือกหรือสร้างวิชาก่อน'); return; }
   if(state.answerKey.some(a=>a===null)){
     if(!confirm('ยังมีบางข้อที่ยังไม่ได้กำหนดเฉลย ต้องการดำเนินการต่อหรือไม่?')) return;
   }
   const payload = {
     teacher_id: session.user.id,
+    subject_id: state.subjectId,
     title: document.getElementById('examTitle').value,
     class_name: document.getElementById('classSelect').value || null,
     num_questions: state.numQuestions,
@@ -606,24 +724,117 @@ window.downloadTemplate = function(){
 };
 
 // ---------- UPLOAD & ALIGN ----------
+let cameraStream = null;
+
+function useImageAsScan(img, prefillPoints){
+  state.uploadImg = img;
+  state.alignPoints = (prefillPoints && prefillPoints.length===4) ? prefillPoints.slice() : [];
+  document.getElementById('captureChoice').style.display = 'none';
+  document.getElementById('cameraArea').style.display = 'none';
+  document.getElementById('alignArea').style.display = 'block';
+  document.getElementById('reviewArea').style.display = 'none';
+  drawUploadCanvas();
+  if(state.alignPoints.length===4){
+    document.getElementById('alignHint').innerHTML = 'จัดตำแหน่งจากกรอบไกด์ให้อัตโนมัติแล้ว ✓ ตรวจสอบจุดสีเหลืองให้ตรงมุมกระดาษ แล้วกด "ตรวจคำตอบอัตโนมัติ" (ถ้าไม่ตรง กด "รีเซ็ตจุดอ้างอิง" เพื่อคลิกเอง)';
+    document.getElementById('detectBtn').disabled = false;
+  }else{
+    document.getElementById('alignHint').innerHTML = 'คลิกมุม 1/4: <b>บนซ้าย</b>';
+    document.getElementById('detectBtn').disabled = true;
+  }
+}
+
 window.handleFile = function(e){
   const file = e.target.files[0];
   if(!file) return;
   const img = new Image();
   const reader = new FileReader();
   reader.onload = ev=>{
-    img.onload = ()=>{
-      state.uploadImg = img;
-      state.alignPoints = [];
-      document.getElementById('alignArea').style.display='block';
-      document.getElementById('reviewArea').style.display='none';
-      document.getElementById('detectBtn').disabled = true;
-      drawUploadCanvas();
-      document.getElementById('alignHint').innerHTML = 'คลิกมุม 1/4: <b>บนซ้าย</b>';
-    };
+    img.onload = ()=> useImageAsScan(img);
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
+};
+
+// คำนวณกรอบไกด์ (สัดส่วนเดียวกับกระดาษคำตอบ 850x1100) ให้อยู่กึ่งกลางเฟรมกล้อง
+function computeGuideRect(vw, vh){
+  const sheetAspect = 850/1100;
+  const maxW = vw*0.92, maxH = vh*0.92;
+  let gw, gh;
+  if(maxW/maxH > sheetAspect){ gh = maxH; gw = gh*sheetAspect; }
+  else{ gw = maxW; gh = gw/sheetAspect; }
+  const x0 = (vw-gw)/2, y0 = (vh-gh)/2;
+  const inset = 0.035; // ตำแหน่งกรอบดำ 4 มุมบนกระดาษ ~3.5% จากขอบ
+  const mx = gw*inset, my = gh*inset;
+  return {
+    box: { x0, y0, gw, gh },
+    corners: [
+      { x:x0+mx,    y:y0+my },
+      { x:x0+gw-mx, y:y0+my },
+      { x:x0+mx,    y:y0+gh-my },
+      { x:x0+gw-mx, y:y0+gh-my },
+    ]
+  };
+}
+
+function drawGuideOverlay(){
+  const video = document.getElementById('cameraVideo');
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if(!vw || !vh) return;
+  const { box, corners } = computeGuideRect(vw, vh);
+  state.guidePoints = corners;
+  const svg = document.getElementById('guideOverlay');
+  svg.setAttribute('viewBox', `0 0 ${vw} ${vh}`);
+  const sw = vw*0.004, dash = `${vw*0.012},${vw*0.008}`, r = vw*0.009;
+  let html = `<rect x="${box.x0}" y="${box.y0}" width="${box.gw}" height="${box.gh}" fill="none" stroke="#E8B93B" stroke-width="${sw}" stroke-dasharray="${dash}" />`;
+  corners.forEach(c=>{
+    html += `<circle cx="${c.x}" cy="${c.y}" r="${r}" fill="#E8B93B" stroke="#232946" stroke-width="${vw*0.0015}"/>`;
+  });
+  svg.innerHTML = html;
+}
+
+window.openCamera = async function(){
+  try{
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+  }catch(e){
+    alert('เปิดกล้องไม่สำเร็จ: '+e.message+' — ลองใช้ปุ่ม "อัปโหลดรูปภาพ" แทน หรืออนุญาตสิทธิ์กล้องให้เว็บนี้ในเบราว์เซอร์');
+    return;
+  }
+  const video = document.getElementById('cameraVideo');
+  video.srcObject = cameraStream;
+  video.onloadedmetadata = drawGuideOverlay;
+  document.getElementById('captureChoice').style.display = 'none';
+  document.getElementById('cameraArea').style.display = 'block';
+  document.getElementById('alignArea').style.display = 'none';
+};
+
+window.closeCamera = function(){
+  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+  document.getElementById('cameraArea').style.display = 'none';
+  document.getElementById('captureChoice').style.display = 'flex';
+};
+
+window.capturePhoto = function(){
+  const video = document.getElementById('cameraVideo');
+  if(!video.videoWidth){ alert('กล้องยังไม่พร้อม กรุณารอสักครู่แล้วลองใหม่'); return; }
+  const tmp = document.createElement('canvas');
+  tmp.width = video.videoWidth; tmp.height = video.videoHeight;
+  tmp.getContext('2d').drawImage(video, 0, 0, tmp.width, tmp.height);
+  const guidePoints = state.guidePoints;
+  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+  document.getElementById('cameraArea').style.display = 'none';
+  const img = new Image();
+  img.onload = ()=>{
+    let prefill = null;
+    if(guidePoints && guidePoints.length===4){
+      const scale = Math.min(1, 800/img.width);
+      prefill = guidePoints.map(p=>({ x:p.x*scale, y:p.y*scale }));
+    }
+    useImageAsScan(img, prefill);
+  };
+  img.src = tmp.toDataURL('image/png');
 };
 
 function drawUploadCanvas(){
@@ -672,8 +883,11 @@ window.resetAlign = function(){
   document.getElementById('alignHint').innerHTML = 'คลิกมุม 1/4: <b>บนซ้าย</b>';
 };
 window.resetScanFlow = function(){
+  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
   state.uploadImg = null; state.alignPoints=[]; state.detected=[];
   document.getElementById('fileInput').value='';
+  document.getElementById('captureChoice').style.display = 'flex';
+  document.getElementById('cameraArea').style.display = 'none';
   document.getElementById('alignArea').style.display='none';
   document.getElementById('reviewArea').style.display='none';
   document.getElementById('studentName').value='';
