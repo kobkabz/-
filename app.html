@@ -34,6 +34,12 @@
   @keyframes sweep{0%{top:0%;opacity:1;} 100%{top:100%;opacity:0;}}
   .upload-drop{border:2px dashed var(--line);border-radius:12px;padding:30px;text-align:center;color:var(--graphite);font-size:14px;cursor:pointer;background:var(--paper);}
   .upload-drop:hover{border-color:var(--ink-soft);}
+  .batch-thumb{flex-shrink:0;width:110px;cursor:pointer;border:2px solid var(--line);border-radius:10px;padding:6px;background:var(--paper);text-align:center;}
+  .batch-thumb img{width:100%;border-radius:6px;display:block;}
+  .batch-thumb.active{border-color:var(--ink);box-shadow:0 0 0 2px rgba(35,41,102,0.15);}
+  .batch-thumb.saved{border-color:var(--correct);}
+  .batch-thumb-label{font-size:11.5px;font-weight:600;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .batch-thumb-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--graphite);margin-top:2px;}
   select.override{font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:4px 6px;border-radius:6px;border:1.4px solid var(--line);background:var(--white);}
   .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;}
   .tag.ok{background:rgba(63,125,88,.14);color:var(--correct);}
@@ -176,12 +182,12 @@
   <!-- STEP 3 -->
   <div class="sheet" id="step3" style="display:none;">
     <h2 class="step-title">สแกน/ถ่ายรูป แล้วตรวจอัตโนมัติ</h2>
-    <p class="step-desc">เปิดกล้องถ่ายสด หรืออัปโหลดรูปกระดาษคำตอบที่กรอกแล้ว จากนั้นคลิกจุดสี่เหลี่ยมดำทั้ง 4 มุมตามลำดับ (บนซ้าย → บนขวา → ล่างซ้าย → ล่างขวา)</p>
+    <p class="step-desc">เปิดกล้องถ่ายสด หรืออัปโหลดรูปได้ทีละหลายรูป (สะดวกเวลาทำในคอม) แต่ละรูปจัดแนวและกรอกชื่อ-เลขที่แยกกันเป็นของตัวเอง</p>
 
     <div id="captureChoice" class="btn-row" style="margin-top:0;">
       <button class="btn" onclick="openCamera()">📷 เปิดกล้องสแกน</button>
-      <button class="btn secondary" onclick="document.getElementById('fileInput').click()">📄 อัปโหลดรูปภาพ</button>
-      <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFile(event)"/>
+      <button class="btn secondary" onclick="document.getElementById('fileInput').click()">📄 อัปโหลดรูปภาพ (เลือกได้หลายรูป)</button>
+      <input type="file" id="fileInput" accept="image/*" multiple style="display:none;" onchange="handleFiles(event)"/>
     </div>
 
     <div id="cameraArea" style="display:none;margin-top:16px;">
@@ -191,12 +197,26 @@
         <svg id="guideOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></svg>
       </div>
       <div class="btn-row">
-        <button class="btn" onclick="capturePhoto()">📸 ถ่ายภาพ</button>
+        <button class="btn" onclick="capturePhoto()">📸 ถ่ายภาพ (ถ่ายต่อได้เรื่อยๆ)</button>
         <button class="btn ghost" onclick="closeCamera()">ปิดกล้อง</button>
       </div>
     </div>
 
+    <div id="batchStrip" style="display:none;margin-top:16px;">
+      <div class="hint">รูปทั้งหมด (<span id="batchCount">0</span> รูป) — คลิกรูปเพื่อจัดแนว/กรอกชื่อของรูปนั้น</div>
+      <div id="batchThumbs" style="display:flex;gap:10px;overflow-x:auto;padding:8px 2px;"></div>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn ghost" onclick="document.getElementById('fileInput').click()">+ เพิ่มรูปอีก</button>
+        <button class="btn ghost" onclick="clearBatch()">ล้างชุดทั้งหมด</button>
+      </div>
+    </div>
+
     <div id="alignArea" style="display:none;margin-top:16px;">
+      <div class="btn-row" id="batchNavButtons" style="display:none;margin-top:0;">
+        <button class="btn ghost" onclick="prevBatchItem()">← รูปก่อนหน้า</button>
+        <span class="hint" id="batchPosLabel" style="margin:0;"></span>
+        <button class="btn ghost" onclick="nextBatchItem()">รูปถัดไป →</button>
+      </div>
       <div class="hint" id="alignHint">คลิกมุม 1/4: <b>บนซ้าย</b></div>
       <div class="canvas-wrap">
         <canvas id="uploadCanvas"></canvas>
@@ -238,11 +258,12 @@
         </div>
       </div>
       <div class="btn-row">
-        <button class="btn" onclick="saveResult()">บันทึกผลคะแนนนี้</button>
-        <button class="btn ghost" onclick="resetScanFlow()">สแกนแผ่นถัดไป</button>
+        <button class="btn" onclick="saveResult()">บันทึกผลคะแนนนี้ และไปรูปถัดไป</button>
+        <button class="btn ghost" onclick="resetScanFlow()">เริ่มอัปโหลดชุดใหม่</button>
       </div>
     </div>
   </div>
+
 
   <!-- STEP 4 -->
   <div class="sheet" id="step4" style="display:none;">
@@ -306,6 +327,8 @@ let state = {
   classStudents: [],
   studentIdx: 0,
   guidePoints: null,
+  batch: [],
+  batchIdx: -1,
 };
 
 // ---------- AUTH + BOOTSTRAP ----------
@@ -591,7 +614,7 @@ function drawTemplate(){
   const BLACK='#111111', GRAY='#555555', LINE='#999999';
   ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0,0,W,H);
 
-  const markerSize = 22, margin = 30;
+  const markerSize = 34, margin = 26;
   const markers = [
     {x:margin, y:margin}, {x:W-margin-markerSize, y:margin},
     {x:margin, y:H-margin-markerSize}, {x:W-margin-markerSize, y:H-margin-markerSize}
@@ -726,33 +749,124 @@ window.downloadTemplate = function(){
 // ---------- UPLOAD & ALIGN ----------
 let cameraStream = null;
 
-function useImageAsScan(img, prefillPoints){
-  state.uploadImg = img;
-  state.alignPoints = (prefillPoints && prefillPoints.length===4) ? prefillPoints.slice() : [];
+// ---------- BATCH STATE ----------
+// state.batch: [{ img, alignPoints, detected, reviewClass, studentId, studentName, saved, thumb }]
+
+function makeThumb(img){
+  const c = document.createElement('canvas');
+  const w = 100, h = Math.round(100 * img.height / img.width);
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(img, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.7);
+}
+
+function addItemsToBatch(items){
+  // items: [{img, alignPoints}]
+  const startIdx = state.batch.length;
+  items.forEach(it=>{
+    state.batch.push({
+      img: it.img,
+      alignPoints: it.alignPoints ? it.alignPoints.slice() : [],
+      detected: [],
+      reviewClass: document.getElementById('classSelect').value || '',
+      studentId: '',
+      studentName: '',
+      saved: false,
+      thumb: makeThumb(it.img),
+    });
+  });
   document.getElementById('captureChoice').style.display = 'none';
+  document.getElementById('batchStrip').style.display = 'block';
+  renderBatchStrip();
+  selectBatchItem(startIdx);
+}
+
+function renderBatchStrip(){
+  document.getElementById('batchCount').textContent = state.batch.length;
+  const wrap = document.getElementById('batchThumbs');
+  wrap.innerHTML = state.batch.map((it,i)=>{
+    const label = it.saved ? ('✓ '+(it.studentName||'บันทึกแล้ว')) : (it.studentName ? it.studentName : `รูปที่ ${i+1}`);
+    const sub = it.studentId ? `เลขที่ ${it.studentId}` : (it.alignPoints.length===4 ? 'จัดแนวแล้ว' : 'ยังไม่จัดแนว');
+    return `<div class="batch-thumb${i===state.batchIdx?' active':''}${it.saved?' saved':''}" onclick="selectBatchItem(${i})">
+      <img src="${it.thumb}"/>
+      <div class="batch-thumb-label">${label}</div>
+      <div class="batch-thumb-sub">${sub}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('batchNavButtons').style.display = state.batch.length>1 ? 'flex' : 'none';
+  if(state.batchIdx>=0){
+    document.getElementById('batchPosLabel').textContent = `รูปที่ ${state.batchIdx+1}/${state.batch.length}`;
+  }
+}
+
+function syncFormToCurrentItem(){
+  if(state.batchIdx<0 || !state.batch[state.batchIdx]) return;
+  const it = state.batch[state.batchIdx];
+  it.alignPoints = state.alignPoints.slice();
+  it.detected = state.detected.slice();
+  it.reviewClass = document.getElementById('reviewClass').value;
+  it.studentId = document.getElementById('studentId').value;
+  it.studentName = document.getElementById('studentName').value;
+}
+
+window.selectBatchItem = function(i){
+  if(i<0 || i>=state.batch.length) return;
+  syncFormToCurrentItem();
+  state.batchIdx = i;
+  const it = state.batch[i];
+  state.uploadImg = it.img;
+  state.alignPoints = it.alignPoints.slice();
+  state.detected = it.detected.slice();
+
   document.getElementById('cameraArea').style.display = 'none';
   document.getElementById('alignArea').style.display = 'block';
-  document.getElementById('reviewArea').style.display = 'none';
   drawUploadCanvas();
+
   if(state.alignPoints.length===4){
-    document.getElementById('alignHint').innerHTML = 'จัดตำแหน่งจากกรอบไกด์ให้อัตโนมัติแล้ว ✓ ตรวจสอบจุดสีเหลืองให้ตรงมุมกระดาษ แล้วกด "ตรวจคำตอบอัตโนมัติ" (ถ้าไม่ตรง กด "รีเซ็ตจุดอ้างอิง" เพื่อคลิกเอง)';
+    document.getElementById('alignHint').innerHTML = 'จัดแนวแล้ว ✓ ตรวจสอบจุดให้ตรงมุมกระดาษ แล้วกด "ตรวจคำตอบอัตโนมัติ"';
     document.getElementById('detectBtn').disabled = false;
   }else{
     document.getElementById('alignHint').innerHTML = 'คลิกมุม 1/4: <b>บนซ้าย</b>';
     document.getElementById('detectBtn').disabled = true;
   }
-}
 
-window.handleFile = function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  const img = new Image();
-  const reader = new FileReader();
-  reader.onload = ev=>{
-    img.onload = ()=> useImageAsScan(img);
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
+  document.getElementById('reviewClass').value = it.reviewClass || '';
+  document.getElementById('studentId').value = it.studentId || '';
+  document.getElementById('studentName').value = it.studentName || '';
+
+  if(it.detected.length){
+    renderReview();
+  }else{
+    document.getElementById('reviewArea').style.display = 'none';
+  }
+  renderBatchStrip();
+};
+
+window.prevBatchItem = function(){ selectBatchItem(state.batchIdx-1); };
+window.nextBatchItem = function(){ selectBatchItem(state.batchIdx+1); };
+
+window.clearBatch = function(){
+  if(state.batch.length && !confirm('ล้างรูปทั้งหมดที่ยังไม่ได้บันทึก ต้องการดำเนินการต่อหรือไม่?')) return;
+  state.batch = []; state.batchIdx = -1;
+  state.uploadImg = null; state.alignPoints = []; state.detected = [];
+  document.getElementById('fileInput').value = '';
+  document.getElementById('batchStrip').style.display = 'none';
+  document.getElementById('alignArea').style.display = 'none';
+  document.getElementById('reviewArea').style.display = 'none';
+  document.getElementById('captureChoice').style.display = 'flex';
+};
+
+window.handleFiles = function(e){
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+  Promise.all(files.map(file => new Promise((resolve)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = ev=>{ img.onload = ()=> resolve({img}); img.src = ev.target.result; };
+    reader.readAsDataURL(file);
+  }))).then(items=>{
+    addItemsToBatch(items);
+  });
 };
 
 // คำนวณกรอบไกด์ (สัดส่วนเดียวกับกระดาษคำตอบ 850x1100) ให้อยู่กึ่งกลางเฟรมกล้อง
@@ -784,10 +898,10 @@ function drawGuideOverlay(){
   state.guidePoints = corners;
   const svg = document.getElementById('guideOverlay');
   svg.setAttribute('viewBox', `0 0 ${vw} ${vh}`);
-  const sw = vw*0.004, dash = `${vw*0.012},${vw*0.008}`, r = vw*0.009;
+  const sw = vw*0.005, dash = `${vw*0.014},${vw*0.009}`, r = vw*0.018;
   let html = `<rect x="${box.x0}" y="${box.y0}" width="${box.gw}" height="${box.gh}" fill="none" stroke="#E8B93B" stroke-width="${sw}" stroke-dasharray="${dash}" />`;
   corners.forEach(c=>{
-    html += `<circle cx="${c.x}" cy="${c.y}" r="${r}" fill="#E8B93B" stroke="#232946" stroke-width="${vw*0.0015}"/>`;
+    html += `<circle cx="${c.x}" cy="${c.y}" r="${r}" fill="#E8B93B" fill-opacity="0.85" stroke="#232946" stroke-width="${vw*0.0025}"/>`;
   });
   svg.innerHTML = html;
 }
@@ -813,7 +927,8 @@ window.openCamera = async function(){
 window.closeCamera = function(){
   if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
   document.getElementById('cameraArea').style.display = 'none';
-  document.getElementById('captureChoice').style.display = 'flex';
+  document.getElementById('captureChoice').style.display = state.batch.length ? 'none' : 'flex';
+  if(state.batch.length) document.getElementById('batchStrip').style.display = 'block';
 };
 
 window.capturePhoto = function(){
@@ -823,8 +938,6 @@ window.capturePhoto = function(){
   tmp.width = video.videoWidth; tmp.height = video.videoHeight;
   tmp.getContext('2d').drawImage(video, 0, 0, tmp.width, tmp.height);
   const guidePoints = state.guidePoints;
-  if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
-  document.getElementById('cameraArea').style.display = 'none';
   const img = new Image();
   img.onload = ()=>{
     let prefill = null;
@@ -832,7 +945,10 @@ window.capturePhoto = function(){
       const scale = Math.min(1, 800/img.width);
       prefill = guidePoints.map(p=>({ x:p.x*scale, y:p.y*scale }));
     }
-    useImageAsScan(img, prefill);
+    addItemsToBatch([{ img, alignPoints: prefill }]);
+    // camera stays open so the teacher can keep capturing sheet after sheet
+    document.getElementById('cameraArea').style.display = 'block';
+    document.getElementById('alignArea').style.display = 'none';
   };
   img.src = tmp.toDataURL('image/png');
 };
@@ -851,10 +967,10 @@ function drawUploadCanvas(){
 }
 function drawMarkerPoint(ctx,p,idx){
   ctx.fillStyle = '#E8B93B';
-  ctx.beginPath(); ctx.arc(p.x,p.y,7,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#232946'; ctx.lineWidth=2; ctx.stroke();
-  ctx.fillStyle='#232946'; ctx.font='700 11px "IBM Plex Mono", monospace'; ctx.textAlign='center';
-  ctx.fillText(String(idx), p.x, p.y-11);
+  ctx.beginPath(); ctx.arc(p.x,p.y,13,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#232946'; ctx.lineWidth=3; ctx.stroke();
+  ctx.fillStyle='#232946'; ctx.font='700 14px "IBM Plex Mono", monospace'; ctx.textAlign='center';
+  ctx.fillText(String(idx), p.x, p.y-18);
 }
 function getCanvasCoords(e, canvas){
   const rect = canvas.getBoundingClientRect();
@@ -874,6 +990,7 @@ function onCanvasAlignClick(e){
   }else{
     document.getElementById('alignHint').innerHTML = 'ครบ 4 จุดแล้ว ✓ กด "ตรวจคำตอบอัตโนมัติ" ได้เลย';
     document.getElementById('detectBtn').disabled = false;
+    if(state.batchIdx>=0) syncFormToCurrentItem();
   }
 }
 window.resetAlign = function(){
@@ -884,10 +1001,12 @@ window.resetAlign = function(){
 };
 window.resetScanFlow = function(){
   if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+  state.batch = []; state.batchIdx = -1;
   state.uploadImg = null; state.alignPoints=[]; state.detected=[];
   document.getElementById('fileInput').value='';
   document.getElementById('captureChoice').style.display = 'flex';
   document.getElementById('cameraArea').style.display = 'none';
+  document.getElementById('batchStrip').style.display = 'none';
   document.getElementById('alignArea').style.display='none';
   document.getElementById('reviewArea').style.display='none';
   document.getElementById('studentName').value='';
@@ -964,6 +1083,8 @@ window.runDetection = function(){
       });
     }
     state.detected = detected;
+    syncFormToCurrentItem();
+    renderBatchStrip();
     renderReview();
   }, 250);
 };
@@ -986,6 +1107,7 @@ function renderReview(){
 }
 window.overrideAnswer = function(q, val){
   state.detected[q] = Number(val)===-1? null : Number(val);
+  syncFormToCurrentItem();
   renderReview();
 };
 function updateLiveScore(){
@@ -1011,6 +1133,8 @@ window.lookupStudentName = async function(){
   }else{
     hint.textContent = 'เลือกชั้นและกรอกเลขที่ ระบบจะขึ้นชื่อให้อัตโนมัติจากทะเบียนนักเรียน';
   }
+  syncFormToCurrentItem();
+  renderBatchStrip();
 };
 
 window.saveResult = async function(){
@@ -1029,9 +1153,22 @@ window.saveResult = async function(){
   try{
     const { error } = await supabase.from('exam_results').insert(record);
     if(error) throw error;
-    alert('บันทึกผลของ '+name+' เรียบร้อย: '+correct+'/'+state.numQuestions);
     document.getElementById('d3').textContent='✓ ';
-    window.resetScanFlow();
+    if(state.batchIdx>=0 && state.batch[state.batchIdx]){
+      state.batch[state.batchIdx].saved = true;
+      syncFormToCurrentItem();
+    }
+    renderBatchStrip();
+    const nextUnsaved = state.batch.findIndex((it,i)=> i>state.batchIdx && !it.saved);
+    const anyUnsavedBefore = state.batch.findIndex(it=>!it.saved);
+    if(nextUnsaved !== -1){
+      selectBatchItem(nextUnsaved);
+    }else if(anyUnsavedBefore !== -1){
+      selectBatchItem(anyUnsavedBefore);
+    }else{
+      alert('บันทึกครบทุกรูปในชุดนี้แล้ว ('+state.batch.length+' รูป) — พร้อมอัปโหลดชุดใหม่ได้เลย');
+      window.resetScanFlow();
+    }
   }catch(e){
     alert('บันทึกไม่สำเร็จ: '+e.message);
   }
