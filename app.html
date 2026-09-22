@@ -481,8 +481,11 @@ window.goStep = async function(n){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelector(`.tab[data-step="${n}"]`).classList.add('active');
   if(n===2){ await refreshClassStudentList(); drawTemplate(); updateStudentNavUI(); }
-  if(n===3 && document.getElementById('reviewClass').value===''){
-    document.getElementById('reviewClass').value = document.getElementById('classSelect').value;
+  if(n===3){
+    if(!state.layout) drawTemplate(); // เผื่อข้ามขั้นตอนที่ 2 มาโดยตรง ต้องมี layout ไว้คำนวณตำแหน่งตรวจ
+    if(document.getElementById('reviewClass').value===''){
+      document.getElementById('reviewClass').value = document.getElementById('classSelect').value;
+    }
   }
   if(n===4) await renderSummary();
 };
@@ -1051,14 +1054,32 @@ function sampleDarkness(ctx, cx, cy, r){
   return count? sum/count : 255;
 }
 window.runDetection = function(){
-  const canvas = document.getElementById('uploadCanvas');
-  const ctx = canvas.getContext('2d');
-  const templateCorners = state.layout.markers.map(m=>({x:m.xNorm,y:m.yNorm}));
-  const clicked = state.alignPoints;
-  const h = computeHomography(templateCorners, clicked);
-  const scanLine = document.getElementById('scanLine');
-  scanLine.classList.remove('active'); void scanLine.offsetWidth; scanLine.classList.add('active');
-  setTimeout(()=>{
+  if(!state.layout){ drawTemplate(); } // กันพลาด: คำนวณ layout ใหม่ถ้ายังไม่มี
+  if(!state.layout){ alert('ไม่พบข้อมูลตำแหน่งข้อสอบ กรุณากลับไปขั้นตอนที่ 1 แล้วบันทึกเฉลยอีกครั้ง'); return; }
+  if(state.alignPoints.length !== 4){ alert('กรุณาคลิกกำหนดมุมทั้ง 4 จุดให้ครบก่อน'); return; }
+  try{
+    const canvas = document.getElementById('uploadCanvas');
+    const ctx = canvas.getContext('2d');
+    const templateCorners = state.layout.markers.map(m=>({x:m.xNorm,y:m.yNorm}));
+    const clicked = state.alignPoints;
+    const h = computeHomography(templateCorners, clicked);
+    const scanLine = document.getElementById('scanLine');
+    scanLine.classList.remove('active'); void scanLine.offsetWidth; scanLine.classList.add('active');
+    setTimeout(()=>{
+      try{
+        runDetectionInner(h, canvas, ctx);
+      }catch(e){
+        console.error(e);
+        alert('ตรวจคำตอบไม่สำเร็จ: '+e.message);
+      }
+    }, 250);
+  }catch(e){
+    console.error(e);
+    alert('ตรวจคำตอบไม่สำเร็จ: '+e.message);
+  }
+};
+
+function runDetectionInner(h, canvas, ctx){
     const thresh = Number(document.getElementById('threshold').value)||165;
     const detected = [];
     drawUploadCanvas();
@@ -1086,8 +1107,7 @@ window.runDetection = function(){
     syncFormToCurrentItem();
     renderBatchStrip();
     renderReview();
-  }, 250);
-};
+}
 
 function renderReview(){
   document.getElementById('reviewArea').style.display='block';
